@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "proof-before-pass"
+version = "0.1.0"
+description = "Checks whether a passing test suite could fail: mutation survivors, red-before-green tests, review tests that fail, sealed held-out tests."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+authors = [{ name = "Ahmed Khan" }]
+dependencies = []
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Topic :: Software Development :: Testing",
+]
+
+[project.urls]
+Repository = "https://github.com/ahmedkham34/proof-before-pass"
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.scripts]
+pbp = "pbp.__main__:main"
+
+[tool.setuptools]
+packages = ["pbp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-p no:cacheprovider"

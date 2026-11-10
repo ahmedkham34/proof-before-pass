@@ -1,0 +1,55 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install the test dependency (pytest only)
+        run: python -m pip install pytest
+      - name: Unit tests
+        run: python -m pytest -q
+      - name: Demo
+        run: timeout 120 python -m pbp demo
+      - name: Falsifiers (each break must turn its test red)
+        run: python tools/falsify.py
+
+  test-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install the test dependency (pytest only)
+        run: python -m pip install pytest
+      - name: Unit tests
+        run: python -m pytest -q
+      - name: Demo
+        run: python -m pbp demo
+
+  privacy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Privacy gate (files and git history)
+        run: python tools/privacy_gate.py . --git-log
