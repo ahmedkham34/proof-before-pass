@@ -17,21 +17,27 @@ Usage:
 
   --max N          run at most N mutants, evenly spread (default 150); the
                    report says "sampled N of M" when it cut
-  --fail-under PCT exit 1 when the score is below PCT (0-100)
+  --fail-under PCT exit 1 when score_without_timeouts is below PCT (0-100)
 
-A mutant that runs past --timeout counts as killed (the suite noticed a hang)
-and is shown in its own "timeouts=" count.
+A mutant that runs past --timeout counts as killed in "killed" and "score"
+(the suite noticed a hang) and is shown in its own "timeouts=" count. The
+report also gives score_without_timeouts, the share killed by a failing test
+alone. --fail-under is judged on that stricter figure.
 
 Limits:
-  - timeouts count as kills, so a slow machine (or a short --timeout) can
-    raise the score; read the "timeouts=" count next to the score;
+  - timeouts count as kills in "score", so a slow machine (or a short
+    --timeout) can raise it; score_without_timeouts does not have that
+    problem, and --fail-under uses it;
+  - without --fail-under the exit code says nothing about the score, so a
+    note on stderr says so;
   - a test that checks the module's source text (a hash, a line count, a
     grep) kills every mutant, so the score says nothing for such a suite;
   - a run with zero mutants has no score and fails any --fail-under,
     including --fail-under 0.
 
-Exit codes: 0 after a baseline-green run (score at or above --fail-under, if
-given), 1 score below --fail-under (or no mutants with --fail-under), 2
+Exit codes: 0 after a baseline-green run (score_without_timeouts at or above
+--fail-under, if given; with no --fail-under the score is not judged), 1 below
+--fail-under (or no mutants with --fail-under), 2
 usage/setup error, 3 baseline red.
 """
 from __future__ import annotations
@@ -261,6 +267,9 @@ def format_report(result):
     lines = ["mutants: total=%d killed=%d survived=%d timeouts=%d score=%s"
              % (result["total"], result["killed"], result["survived"], result["timeouts"],
                 "n/a" if result["score"] is None else "%.1f%%" % result["score"])]
+    if "score_without_timeouts" in result:   # absent only in a hand-made result dict
+        strict = result["score_without_timeouts"]
+        lines[0] += " score_without_timeouts=%s" % ("n/a" if strict is None else "%.1f%%" % strict)
     if result["sampled"]:
         lines.append("sampled %d of %d generated mutants (--max %d)"
                      % (result["total"], result["generated"], result["total"]))
@@ -347,6 +356,7 @@ def run(args):
                             "mutated": mut_txt, "status": status})
 
         total = len(results)
+        timeouts = sum(1 for r in results if r["status"] == "timeout")
         survivors = [{k: r[k] for k in ("line", "col", "kind", "original", "mutated")}
                      for r in results if r["status"] == "survived"]
         result = {
@@ -356,8 +366,9 @@ def run(args):
             "total": total,
             "killed": killed,
             "survived": total - killed,
-            "timeouts": sum(1 for r in results if r["status"] == "timeout"),
+            "timeouts": timeouts,
             "score": None if total == 0 else round(100.0 * killed / total, 1),
+            "score_without_timeouts": None if total == 0 else round(100.0 * (killed - timeouts) / total, 1),
             "survivors": survivors,
             "mutants": results,
         }
@@ -366,9 +377,15 @@ def run(args):
             with open(args.json_out, "w", encoding="utf-8") as fh:
                 json.dump(result, fh, indent=2, sort_keys=True)
                 fh.write("\n")
-        if args.fail_under is not None and (result["score"] is None or result["score"] < args.fail_under):
-            sys.stderr.write("score %s is below --fail-under %g\n"
-                             % ("n/a" if result["score"] is None else "%.1f%%" % result["score"], args.fail_under))
+        strict = result["score_without_timeouts"]
+        if args.fail_under is None:
+            sys.stderr.write("note: no --fail-under given, so the exit code says nothing about the score; "
+                             "pass --fail-under PCT in CI\n")
+        elif strict is None or strict < args.fail_under:
+            # with no timeouts the two figures are equal and the old wording "score X%" stays true
+            name = "score_without_timeouts" if result["timeouts"] else "score"
+            sys.stderr.write("%s %s is below --fail-under %g\n"
+                             % (name, "n/a" if strict is None else "%.1f%%" % strict, args.fail_under))
             return EXIT_UNDER
         return EXIT_OK
     finally:

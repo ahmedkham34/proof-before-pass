@@ -15,7 +15,7 @@ def test_low_stock():
 ```
 ```
 $ python3 -m pbp mutate --repo . --module flags.py --tests tests/test_or_true.py
-mutants: total=2 killed=1 survived=1 timeouts=0 score=50.0%
+mutants: total=2 killed=1 survived=1 timeouts=0 score=50.0% score_without_timeouts=50.0%
 survivors:
 2:12 cmp_flip  return [level < threshold for level in levels] -> return [level >= threshold for level in levels]
 ```
@@ -96,7 +96,7 @@ python3 -m pbp mutate --repo . --module inventory.py --tests tests/test_inventor
 On the demo's vacuous suite (`demo/toy`), as printed (indented) by stage 1 of `python3 -m pbp demo`:
 
 ```
-mutants: total=10 killed=4 survived=6 timeouts=0 score=40.0%
+mutants: total=10 killed=4 survived=6 timeouts=0 score=40.0% score_without_timeouts=40.0%
 survivors:
 6:4 return_none  return stock < threshold -> return None
 6:11 cmp_flip  return stock < threshold -> return stock >= threshold
@@ -104,23 +104,26 @@ survivors:
 12:15 int_inc  if value < 0: -> if value < 1:
 13:8 raise_pass  raise ValueError("negative quantity") -> pass
 19:43 cmp_flip  return [name for name, qty in items if qty < threshold] -> return [name for name, qty in items if qty >= threshold]
+note: no --fail-under given, so the exit code says nothing about the score; pass --fail-under PCT in CI
 ```
 
 With `demo/fixed_tests/test_inventory.py` in place and `--fail-under 100` (stage 1 runs it without the flag):
 
 ```
-mutants: total=10 killed=10 survived=0 timeouts=0 score=100.0%
+mutants: total=10 killed=10 survived=0 timeouts=0 score=100.0% score_without_timeouts=100.0%
 ```
 
 Options: `--max N` (default 150, evenly spread; the report says "sampled N of M" when it cut), `--timeout S`
-(per run, default 60), `--json FILE`, `--fail-under PCT`.
+(per run, default 60), `--json FILE`, `--fail-under PCT`. `--fail-under` is judged on `score_without_timeouts`.
+Without it the run exits 0 whatever the score, and a `note:` line on stderr says so; pass it in CI.
 
-Exit codes: 0 baseline green and score at or above `--fail-under`; 1 score below `--fail-under`, or no mutants at
+Exit codes: 0 baseline green and `score_without_timeouts` at or above `--fail-under` (or no `--fail-under`); 1 below `--fail-under`, or no mutants at
 all when `--fail-under` is given (even `--fail-under 0`); 2 usage or setup error; 3 the tests fail before any
 mutation (including on the module as rewritten by `ast.unparse`).
 
-Limits: a small fixed set of operators, one module per run. A mutant that runs past `--timeout` counts as killed,
-so a slow machine or a short timeout can raise the score: read the `timeouts=` count. A test that checks the
+Limits: a small fixed set of operators, one module per run. A mutant that runs past `--timeout` counts as killed
+in `killed` and `score`, so a slow machine or a short timeout can raise them. `score_without_timeouts` leaves those
+mutants out of the kills; read it, and the `timeouts=` count. A test that checks the
 module's source text (a hash, a line count) kills every mutant, so the score means nothing for such a suite.
 Survivors can be equivalent mutants (a change that does not alter behaviour); read each one.
 
@@ -278,7 +281,7 @@ container or VM. The read-only store stops mistakes, not the same user, who can 
 | code | meaning |
 |---|---|
 | 0 | the check ran and passed (`--help` exits 0 for every command) |
-| 1 | the check ran and failed: a score under `--fail-under` or no mutants with it, a redgreen FAIL, no red test locked, a failed held-out check, a demo stage not as expected |
+| 1 | the check ran and failed: `score_without_timeouts` under `--fail-under` or no mutants with it, a redgreen FAIL, no red test locked, a failed held-out check, a demo stage not as expected |
 | 2 | usage error, unreadable input, unknown commit, a path outside the tree, an existing OUT file, or an unexpected error (one line, no traceback) |
 | 3 | `mutate`: the tests fail before any mutation |
 | 4 | `heldout verify` and `heldout check`: the store does not match its seal |
@@ -302,10 +305,13 @@ Everything below can be re-run from a clone.
 
 | module | tests | mutants | killed | survived | timeouts | score | sampled |
 |---|---|---|---|---|---|---|---|
-| pbp/mutate.py | tests/test_mutate.py, tests/test_cli.py | 200 | 179 | 21 | 0 | 89.5% | 200 of 217 |
+| pbp/mutate.py | tests/test_mutate.py, tests/test_cli.py | 200 | 179 | 21 | 0 | 89.5% | 200 of 226 |
 | pbp/heldout.py | tests/test_heldout.py, tests/test_cli.py | 200 | 176 | 24 | 0 | 88.0% | 200 of 318 |
 | pbp/lock_review_tests.py | tests/test_lock_review_tests.py, tests/test_cli.py | 101 | 89 | 12 | 0 | 88.1% | all 101 |
 | pbp/redgreen.py | tests/test_redgreen.py, tests/test_cli.py | 120 | 110 | 10 | 1 | 91.7% | 120 of 361 |
+
+The mutate.py and heldout.py rows were re-run for this version (no timeouts, so `score_without_timeouts` equals
+`score`); the other two rows were not re-run.
 
 2. Four shapes of a test that cannot fail (`demo/shapes/`; also stage 5 of the demo and
 `tests/test_cannot_fail_shapes.py`). Each test passes; mutate shows why that means little:

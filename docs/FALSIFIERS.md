@@ -19,6 +19,8 @@ The table below is the `--markdown` output of one full run.
 | mutate-cmp-table | pbp/mutate.py | `<` is flipped to `>` instead of its negation `>=` | `test_apply_mutant_makes_exactly_the_named_change` | red |
 | mutate-fail-under | pbp/mutate.py | a score below --fail-under still exits 0 | `test_fail_under_gates_the_score` | red |
 | mutate-zero-mutants | pbp/mutate.py | a run with no mutants passes --fail-under 0 | `test_zero_mutants_fail_any_fail_under_even_0` | red |
+| mutate-fail-under-lenient | pbp/mutate.py | --fail-under is judged on the score that counts timeouts as kills | `test_score_without_timeouts_is_reported_and_gates_fail_under` | red |
+| mutate-no-fail-under-note | pbp/mutate.py | the note that the exit code ignores the score is not printed | `test_note_when_no_fail_under_is_given` | red |
 | mutate-unparse-baseline | pbp/mutate.py | the baseline runs on the original source, so unparse-only changes count as kills | `test_unparse_only_change_is_a_baseline_failure_not_kills` | red |
 | mutate-sampled | pbp/mutate.py | the report hides that only a sample of the mutants ran | `test_text_report_says_when_mutants_were_sampled` | red |
 | mutate-timeouts | pbp/mutate.py | timeouts are folded into kills and not counted | `test_timeouts_are_counted_and_shown` | red |
@@ -90,4 +92,4 @@ The table below is the `--markdown` output of one full run.
 | privacy-symlink | tools/privacy_gate.py | a symlink is skipped silently | `test_a_symlink_is_reported_not_skipped` | red |
 | privacy-git-log | tools/privacy_gate.py | --git-log finds nothing in commit e-mails and messages | `test_git_log_scans_author_emails_and_messages` | red |
 
-falsify: 74/74 breaks turned their test red (exit 0)
+falsify: 76/76 breaks turned their test red (exit 0)

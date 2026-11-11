@@ -366,3 +366,37 @@ def test_the_module_runs_as_a_script():
                        stdin=subprocess.DEVNULL)
     assert r.returncode == 2
     assert "--repo" in r.stderr
+
+
+def test_score_without_timeouts_is_reported_and_gates_fail_under(make_repo, tmp_path, capsys):
+    spin = "def spin(stop):\n    while not stop:\n        pass\n    return 1\n"
+    spin_test = "from mod import spin\n\n\ndef test_spin():\n    assert spin(True) == 1\n"
+    repo = make_repo()
+    repo.commit({"mod.py": spin, "test_mod.py": spin_test})
+    out = tmp_path / "r.json"
+    args = ["--repo", str(repo.path), "--module", "mod.py", "--tests", "test_mod.py",
+            "--timeout", "3", "--json", str(out)]
+    assert mutate.main(args) == 0
+    result = json.loads(out.read_text())
+    assert "score_without_timeouts" in result
+    assert result["score_without_timeouts"] == 66.7
+    assert (result["total"], result["killed"], result["survived"], result["timeouts"]) == (3, 3, 0, 1)
+    assert result["score"] == 100.0
+    assert "score=100.0% score_without_timeouts=66.7%" in capsys.readouterr().out
+    rc = mutate.main(args + ["--fail-under", "80"])          # lenient 100.0 would pass, strict 66.7 must not
+    assert rc == 1
+    assert "score_without_timeouts 66.7% is below --fail-under 80" in capsys.readouterr().err
+    assert mutate.main(args + ["--fail-under", "60"]) == 0
+
+
+def test_note_when_no_fail_under_is_given(make_repo, tmp_path, capsys):
+    repo = make_repo()
+    repo.commit({"mod.py": MODULE, "test_mod.py": STRONG})
+    note = "note: no --fail-under given"
+    rc, _ = run_mutate(repo, tmp_path)
+    err = capsys.readouterr().err
+    assert rc == 0
+    assert err.count(note) == 1 and "pass --fail-under PCT in CI" in err
+    rc, _ = run_mutate(repo, tmp_path, extra=("--fail-under", "50"))
+    assert rc == 0
+    assert note not in capsys.readouterr().err
