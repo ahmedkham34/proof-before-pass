@@ -27,9 +27,14 @@ check and prints only the counts. The killed mutant is `return None`: iterating 
 
 ```
 git clone https://github.com/ahmedkham34/proof-before-pass.git pbp && cd pbp
-python3 -m pip install pytest      # the code under test runs with pytest; the tools use no packages
+python3 -m venv .venv
+. .venv/bin/activate
+pip install pytest      # the code under test runs with pytest; the tools use no packages
 python3 -m pbp demo
 ```
+
+A virtual environment is needed because a plain `pip install` fails on stock Debian, Ubuntu and Homebrew Pythons
+(`externally-managed-environment`). Debian and Ubuntu may first need `sudo apt install python3-venv`.
 
 The demo needs a clone: its material is in the `demo/` folder, which an installed package does not have. Last
 lines of a real run:
@@ -45,11 +50,37 @@ lines of a real run:
 demo: 5/5 stages as expected in 14.5s
 ```
 
+(The time varies by machine.)
+
 Warning: every tool runs the code under test (and a review's test code) with your user rights. Use a throwaway
 copy or a container for code you do not trust.
 
 Where to start: run `mutate` on the module you care most about. It needs no second commit, no review and no
 sealed tests. Requirements: Python 3.11 or newer, `git` and `pytest`. CI runs 3.11 to 3.14.
+
+## On your own repository
+
+Clone pbp once, then run it from your repository with `PYTHONPATH` pointing at the clone. Nothing of pbp is installed.
+
+```
+git clone https://github.com/ahmedkham34/proof-before-pass "$HOME/proof-before-pass"
+cd your-repo
+python3 -m venv .venv
+. .venv/bin/activate
+pip install pytest
+PYTHONPATH="$HOME/proof-before-pass" python3 -m pbp mutate --repo . --module yourmodule.py --tests tests/test_yourmodule.py
+```
+
+- Run pbp with the Python that has pytest and your project's own dependencies (use your project's venv if it has
+  one): `mutate` runs your tests with that same Python.
+- Keep `.venv` out of git (put `.venv/` in `.gitignore`): `mutate` stops on a tracked virtual environment.
+- Commit the module and the test file first. `mutate` reads git-tracked files only; an uncommitted file stops with
+  `pbp mutate: test is not a tracked file: ...` (exit 2).
+- `pip install "$HOME/proof-before-pass"` also gives a `pbp` command, but `pbp demo` then fails (an installed package
+  has no `demo/` folder). For the demo, use `pip install -e "$HOME/proof-before-pass"` or run it from the clone.
+- `mutate` scores a test file, not one test. A test that cannot fail is hidden when an honest test in the same file
+  kills the mutants. To judge one test, put it in its own file. `--tests` takes a file path, not a pytest node id
+  (`tests/test_x.py::test_name` stops with `test is not a tracked file`).
 
 ## mutate: can the tests fail?
 
@@ -209,6 +240,15 @@ python3 -m pbp heldout seal held_tests store
 python3 -m pbp heldout check store app <commit> out_real --seal <seal id>
 ```
 
+Sealed test files find the code through the `HELDOUT_TREE` environment variable, which `check` sets to the extracted
+tree. A test written like a normal test (`from inventory import parse_qty`) fails with `ModuleNotFoundError`. The
+demo's held test (`demo/heldout/held_tests/test_parse_qty.py`) reads the tree path like this:
+
+```
+sys.path.insert(0, os.environ["HELDOUT_TREE"])
+from inventory import parse_qty  # noqa: E402
+```
+
 `seal` printed `fe123c69526b21617be4f4fa9ca3a1671f7d60242972553f0f7e7977c3d4ed5f` for `demo/heldout/held_tests`
 (stage 4 of `python3 -m pbp demo` seals the same folder and checks the real fix and the forged candidate).
 
@@ -288,7 +328,9 @@ them for real mutation testing. `pbp mutate` is a small dependency-free check th
 ## Development
 
 ```
-python3 -m pip install pytest
+python3 -m venv ../pbp-venv               # outside the clone, so the privacy gate does not scan it
+. ../pbp-venv/bin/activate
+pip install pytest
 python3 -m pytest -q                       # the test suite (make test)
 python3 -m pbp demo                        # the demo (make demo)
 python3 tools/falsify.py                   # every falsifier; --markdown prints the docs table (make falsify)
